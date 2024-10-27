@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" type="image/gif" sizes="1x1" href="data:;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
+        <link rel="manifest" href="/site.webmanifest" />
+        <title>Push Notifications Demo</title>
+        <script defer="defer" crossorigin="anonymous" src="/main.js"></script>
+    </head>
+    <body>
+        <h1>Web Push Notifications Demo Application</h1>
+        <details open="open">
+            <summary>Instructions</summary>
+            <p>
+                Grant the notifications permission to start receiving push
+                notifications.
+            </p>
+        </details>
+        <noscript>Please enable scripting</noscript>
+    </body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "VAPID_EMAIL": "mailto:support@example.com",
+  "VAPID_PUBLIC_KEY": "BPpC-HHjgA2LHdbiOCyXRuc5B6nFdcnMG3ewEiZG9FApkO5lGcXEKl-0Teb5twjQ7RVTJ561rn9NlABnoW5UXBI",
+  "VAPID_PRIVATE_KEY": {
+    "key_ops": [
+      "sign"
+    ],
+    "ext": true,
+    "kty": "EC",
+    "x": "-kL4ceOADYsd1uI4LJdG5zkHqcV1ycwbd7ASJkb0UCk",
+    "y": "kO5lGcXEKl-0Teb5twjQ7RVTJ561rn9NlABnoW5UXBI",
+    "crv": "P-256",
+    "d": "KWg0z3HYCs8o16-D9ceev3CSuVJShLxXqTnwo7VVs6g"
+  }
+}
