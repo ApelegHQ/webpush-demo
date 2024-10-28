@@ -1,6 +1,7 @@
 import { aes128gcm } from "@apeleghq/rfc8188/encodings";
 import encrypt from "@apeleghq/rfc8188/encrypt";
 import vapid from "../config/vapid.json" with { type: "json" };
+import clientId from "./clientId.mjs";
 import subscriptionInfoWrapper from "./subscriptionInfoWrapper.mjs";
 
 const clients = new Map();
@@ -91,7 +92,7 @@ const postEvent = async (subscription, event) => {
     );
 
     // If the response was 401 (Unauthorized), 404 (Not found) or 410 (Gone),
-    // it likely means that fthe subscription no longer exists.
+    // it likely means that the subscription no longer exists.
     if ([401, 404, 410].includes(req.status)) {
       console.warn(
         new Date().toISOString(),
@@ -152,15 +153,15 @@ export const deleteClient = (id) => {
   clients.delete(id);
 };
 
-export const addClient = (subcription) => {
-  // We need the ID attribute, hence the early wrapping
-  subcription = subscriptionInfoWrapper(subcription);
+export const addClient = async (subscription) => {
+  const subcriptionId = await clientId(subscription);
 
-  const { id } = subcription;
-  if (clients.has(id)) {
+  if (clients.has(subcriptionId)) {
     return;
   }
 
-  clients.set(id, subcription);
-  newSimulatedEvents(id);
+  subscription = subscriptionInfoWrapper(subcriptionId, subscription);
+  clients.set(subcriptionId, subscription);
+  
+  newSimulatedEvents(subcriptionId);
 };

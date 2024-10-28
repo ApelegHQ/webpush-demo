@@ -1,17 +1,12 @@
 import rfc8291Ikm from "./rfc8291Ikm.mjs";
 
-export default (subscriptionInfo) => {
+export default (subcriptionId, subscriptionInfo) => {
   subscriptionInfo.endpoint = new URL(subscriptionInfo.endpoint);
 
   Object.defineProperties(subscriptionInfo, {
     "id": {
         get() {
-            // In production, the ID should be derived from more entropy,
-            // such as the entire JSON object in some canonical form.
-            // It might be also a good idea to move ID generation to a dedicated
-            // function, to avoid having to call the wrapper early in the
-            // subscription manager.
-            return this.endpoint.pathname.slice(-12);
+            return subcriptionId;
         }
     },
     "encryptionKeys": {
