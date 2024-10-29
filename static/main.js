@@ -48,23 +48,23 @@
     throw new Error(name + " is not available");
   }
 
-  function notifySwOfPermissionChange() {
+  function notifySw(type) {
     if (navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
-        type: "notifications-ready",
+        type,
       });
     }
   }
 
-  var requestNotificationPermissions = function (requested) {
+  var requestNotificationPermissions = function (permission, requested) {
     var permission = Notification.permission;
     switch (permission) {
       case "default":
         if (!requested) {
           // Prevent double requests
-          Notification.requestPermission().then(function () {
+          Notification.requestPermission().then(function (permission) {
             setTimeout(function () {
-              requestNotificationPermissions(true);
+              requestNotificationPermissions(permission, true);
             }, 0);
           });
         }
@@ -74,7 +74,7 @@
         break;
       case "granted":
         console.info("Notifications permissions granted, notifying SW");
-        notifySwOfPermissionChange();
+        notifySw("notifications-ready");
         break;
     }
   };
@@ -95,7 +95,7 @@
       "click",
       function (event) {
         event.preventDefault();
-        requestNotificationPermissions();
+        requestNotificationPermissions(Notification.permission);
       },
       false,
     );
@@ -115,7 +115,7 @@
           }
           if (!hasDisabled || firstRun) {
             firstRun = false;
-            notifySwOfPermissionChange();
+            notifySw("notifications-ready");
           }
         }
       };
@@ -149,12 +149,23 @@
     textarea$.style.setProperty("padding", "0.5em", "important");
     textarea$.style.setProperty("width", "100%", "important");
     navigator.serviceWorker.addEventListener("message", function (event) {
+      console.error("AAADASD", event);
       if (!event.isTrusted || !event.data) {
         return;
       }
-      if (event.data.type === "notification") {
+
+      if (event.data.type === "console") {
         textarea$.value = [
-          "[" + new Date().toISOString() + "] " +
+          "[" + new Date().toISOString() + "] LOG(" +
+          event.data.level.padStart(5, " ") + ") " +
+          event.data.args.map(function (arg) {
+            return JSON.stringify(arg);
+          }).join(" "),
+          textarea$.value,
+        ].join("\r\n");
+      } else if (event.data.type === "push-notification") {
+        textarea$.value = [
+          "[" + new Date().toISOString() + "] NOTIFICATION " +
           JSON.stringify(event.data.value),
           textarea$.value,
         ].join("\r\n");
