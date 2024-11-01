@@ -74,7 +74,7 @@ const postEvent = async (subscription, event) => {
         "application/octet-stream",
       ],
       // ["push-receipt", ""],
-      ["ttl", "1"],
+      ["ttl", "60"],
     ],
     body: bodyBytes,
     // duplex: "half",

@@ -19,58 +19,35 @@
   }();
 
   function messageAllClients(message) {
-    self.clients.matchAll()
+    return self.clients.matchAll()
       .then(function (clientList) {
         clientList.forEach(function (client) {
           client.postMessage(message);
         });
-      }, function () {
-        console.error("Error fetching all clients");
+      }, function (e) {
+        console.error("Error fetching all clients", e);
       });
   }
 
   var setupPushSubscription = (function () {
-    var registrationInProgress = Promise.resolve();
-
+    var registrationInProgress;
     var register = async function () {
       try {
         if (!registration) {
           throw new Error("No service-worker registration found!");
         }
 
-        var publicKeyRequest = await fetch("/vapid-public-key");
-        if (!publicKeyRequest.ok) {
-          throw new Error("Error obtaining VAPID public key");
-        }
-        var publicKey = await publicKeyRequest.arrayBuffer();
-
-        var options = {
-          userVisibleOnly: true,
-          applicationServerKey: publicKey,
-        };
-
-        if (registration.pushManager.permissionState) {
-          const permissionState = await registration.pushManager
-            .permissionState(
-              options,
-            );
-          console.debug("Push notifications permission is " + permissionState);
-          if (permissionState !== "granted") {
-            // Seems to require a full refresh in Safari
-            throw new Error("Push pemission not granted");
-          }
-        } else {
-          console.info("permissionState is unavailable");
-        }
-
-        // If there's an active subscription, use that one
         var subscription = await registration.pushManager.getSubscription()
           .then(function (subscription) {
-            if (!subscription || subscription.expirationTime > Date.now()) {
-              console.info("Attempting to create a new subscription");
-              return registration.pushManager.subscribe(options);
+            if (
+              !subscription ||
+              (subscription.expirationTime != null &&
+                subscription.expirationTime <= Date.now())
+            ) {
+              throw new Error("Missing subscription");
             }
-            console.info("Using existing subscription");
+            console.info("Subscription found");
+
             return subscription;
           });
 
@@ -87,7 +64,11 @@
             return;
           }
 
-          console.error("Error notifying server of subscription", res.status);
+          console.error(
+            "Error notifying server of subscription",
+            res.status,
+            subscription,
+          );
         }).catch(function (e) {
           console.error("Error sending subscription endpoint to server", e);
           messageAllClients({
@@ -98,13 +79,6 @@
         });
       } catch (e) {
         console.error("Error creating subscription", e);
-        if (
-          Notification.permission === "granted" && e &&
-          e.message === "Push pemission not granted"
-        ) {
-          clients.forEach((client) => client.navigate(client.url));
-          return;
-        }
         messageAllClients({
           type: "error",
           subtype: "subscription",
@@ -115,10 +89,10 @@
     };
 
     return function () {
-      registrationInProgress = registrationInProgress.then(register, register)
-        .finally(function () {
-          registrationInProgress = Promise.resolve();
-        });
+      if (!registrationInProgress) {
+        registrationInProgress = register();
+      }
+
       return registrationInProgress;
     };
   })();
@@ -137,7 +111,7 @@
       event.data &&
       event.data.type === "notifications-ready"
     ) {
-      setupPushSubscription();
+      event.waitUntil(setupPushSubscription());
     }
   }, false);
 
@@ -145,54 +119,35 @@
     console.info("Error processing received message", event.data);
   }, false);
 
-  self.addEventListener("pushsubscriptionchange", async function (event) {
-    var subscription = await self.registration.pushManger.subscribe(
+  self.addEventListener("pushsubscriptionchange", function (event) {
+    event.waitUntil(self.registration.pushManger.subscribe(
       event.oldSubscription.options,
-    );
+    )).then(function () {
+      return setupPushSubscription();
+    });
   });
 
   self.addEventListener("push", function (event) {
-    var data = event.data.json();
+    try {
+      var data = event.data.json();
 
-    if (Notification.permission !== "granted") {
-      return;
+      event.waitUntil(Promise.all([
+        registration.showNotification(
+          data.title,
+          {
+            body: data.body || "",
+            icon: "",
+          },
+        ),
+        messageAllClients({
+          type: "push-notification",
+          value: data,
+        }),
+      ]));
+    } catch (e) {
+      console.error("Error processing push event", e);
     }
-
-    registration.showNotification(
-      data.title,
-      {
-        body: data.body || "",
-        icon: "",
-      },
-    );
-
-    messageAllClients({
-      type: "push-notification",
-      value: data,
-    });
   }, false);
 
-  if (
-    typeof Notification === "function" &&
-    typeof navigator === "object" &&
-    typeof navigator.permissions === "object" &&
-    typeof navigator.permissions.query === "function"
-  ) {
-    navigator.permissions.query({ name: "notifications" }).then(
-      function (result) {
-        var handler = function (state) {
-          if (state !== "granted") {
-            return;
-          }
-          setupPushSubscription();
-        };
-        result.addEventListener("change", function () {
-          handler(result.state);
-        }, false);
-        handler(result.state);
-      },
-    ).catch(function (e) {
-      console.error("Error querying notifications permission", e);
-    });
-  }
+  // navigator.setAppBadge(5);
 }();

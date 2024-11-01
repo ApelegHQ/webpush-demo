@@ -1,6 +1,26 @@
 ~function () {
   "use strict";
 
+  var consoleEvents = new EventTarget();
+  ~function () {
+    var origConsole = {
+      debug: console.debug,
+      info: console.info,
+      log: console.log,
+      warn: console.warn,
+      error: console.error,
+    };
+    ["debug", "info", "log", "warn", "error"].forEach(function (level) {
+      if (!origConsole[level]) return;
+      console[level] = function (...args) {
+        origConsole[level](...args);
+        consoleEvents.dispatchEvent(
+          new CustomEvent("console", { detail: { level, args } }),
+        );
+      };
+    });
+  }();
+
   function onLoad(handler) {
     if (["interactive", "complete"].indexOf(document.readyState) !== -1) {
       setTimeout(handler, 0);
@@ -16,9 +36,21 @@
   }
 
   async function setupServiceWorker() {
-    if (!navigator.serviceWorker) {
+    if (
+      typeof ServiceWorkerRegistration !== "function" ||
+      !navigator.serviceWorker
+    ) {
       throw new Error("Service worker not supported");
     }
+    if (typeof PushManager !== "function") {
+      throw new Error("PushManager not available");
+    }
+    if (
+      typeof ServiceWorkerRegistration.prototype.showNotification !== "function"
+    ) {
+      throw new Error("Showing notifications from a SW is not available");
+    }
+
     var registration = await navigator.serviceWorker.register(
       "/service-worker.js",
       { scope: "/" },
@@ -57,15 +89,12 @@
   }
 
   var requestNotificationPermissions = function (permission, requested) {
-    var permission = Notification.permission;
     switch (permission) {
       case "default":
         if (!requested) {
           // Prevent double requests
           Notification.requestPermission().then(function (permission) {
-            setTimeout(function () {
-              requestNotificationPermissions(permission, true);
-            }, 0);
+            requestNotificationPermissions(permission, true);
           });
         }
         break;
@@ -74,7 +103,7 @@
         break;
       case "granted":
         console.info("Notifications permissions granted, notifying SW");
-        notifySw("notifications-ready");
+        createPushSubscription();
         break;
     }
   };
@@ -102,8 +131,7 @@
     button$.appendChild(document.createTextNode("Enable notifications"));
     document.body.appendChild(button$);
     var enableNotificationsButtonState = function () {
-      var firstRun = true;
-      var handler = function (state) {
+      var handler = function (state, firstRun) {
         var hasDisabled = button$.hasAttribute("disabled");
         if (state !== "granted") {
           if (hasDisabled) {
@@ -114,11 +142,11 @@
             button$.setAttribute("disabled", "disabled");
           }
           if (!hasDisabled || firstRun) {
-            firstRun = false;
-            notifySw("notifications-ready");
+            createPushSubscription();
           }
         }
       };
+
       if (
         typeof navigator.permissions === "object" &&
         navigator.permissions.query === "function"
@@ -128,17 +156,71 @@
             result.addEventListener("change", function () {
               handler(result.state);
             }, false);
-            handler();
+            handler(result.state, true);
           },
         ).catch(function (e) {
           console.error("Error querying notifications permission", e);
         });
       } else {
+        handler(Notification.permission, true);
         setInterval(function () {
           handler(Notification.permission);
         }, 100);
       }
     };
+
+    var createPushSubscription = (function () {
+      var actionInProgress;
+
+      return function () {
+        if (!actionInProgress) {
+          actionInProgress = navigator.serviceWorker.ready.then(
+            function (registration) {
+              return registration.pushManager.getSubscription()
+                .then(function (subscription) {
+                  if (
+                    !subscription ||
+                    (subscription.expirationTime != null &&
+                      subscription.expirationTime <= Date.now())
+                  ) {
+                    console.info("Attempting to create a new subscription", subscription);
+                    return getPushOptions().then(function (options) {
+                      return registration.pushManager.subscribe(options);
+                    });
+                  }
+                  console.info("Using existing subscription", subscription);
+                  return subscription;
+                });
+            },
+          );
+          actionInProgress.then(function (subcription) {
+            if (!subcription) {
+              return;
+            }
+            notifySw("notifications-ready");
+          });
+          actionInProgress.finally(function () {
+            actionInProgress = undefined;
+          });
+        }
+        return actionInProgress;
+      };
+    })();
+
+    async function getPushOptions() {
+      var publicKeyRequest = await fetch("/vapid-public-key");
+      if (!publicKeyRequest.ok) {
+        throw new Error("Error obtaining VAPID public key");
+      }
+      var publicKey = await publicKeyRequest.arrayBuffer();
+
+      var options = {
+        userVisibleOnly: true,
+        applicationServerKey: publicKey,
+      };
+
+      return options;
+    }
 
     var textarea$ = document.createElement("textarea");
     textarea$.setAttribute("placeholder", "Nothing here yet\u2026");
@@ -148,15 +230,24 @@
     textarea$.style.setProperty("margin", "0", "important");
     textarea$.style.setProperty("padding", "0.5em", "important");
     textarea$.style.setProperty("width", "100%", "important");
+    consoleEvents.addEventListener("console", function (event) {
+      textarea$.value = [
+        "[" + new Date().toISOString() + "] BR LOG(" +
+        event.detail.level.padStart(5, " ") + ") " +
+        event.detail.args.map(function (arg) {
+          return JSON.stringify(arg);
+        }).join(" "),
+        textarea$.value,
+      ].join("\r\n");
+    }, false);
     navigator.serviceWorker.addEventListener("message", function (event) {
-      console.error("AAADASD", event);
       if (!event.isTrusted || !event.data) {
         return;
       }
 
       if (event.data.type === "console") {
         textarea$.value = [
-          "[" + new Date().toISOString() + "] LOG(" +
+          "[" + new Date().toISOString() + "] SW LOG(" +
           event.data.level.padStart(5, " ") + ") " +
           event.data.args.map(function (arg) {
             return JSON.stringify(arg);
