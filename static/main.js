@@ -59,9 +59,12 @@
   }
 
   function showError(name) {
-    var supportsPopover = typeof HTMLElement.prototype.showPopover === "function";
+    var supportsPopover =
+      typeof HTMLElement.prototype.showPopover === "function";
     var supportsDialog = typeof HTMLDialogElement === "function";
-    var errorElementTag = supportsPopover || !supportsDialog ? "aside" : "dialog";
+    var errorElementTag = supportsPopover || !supportsDialog
+      ? "aside"
+      : "dialog";
     var error$ = document.createElement(errorElementTag);
     if (supportsPopover) {
       error$.setAttribute("popover", "manual");
@@ -89,6 +92,62 @@
       });
     }
   }
+
+  async function getPushOptions() {
+    var publicKeyRequest = await fetch("/vapid-public-key");
+    if (!publicKeyRequest.ok) {
+      throw new Error("Error obtaining VAPID public key");
+    }
+    var publicKey = await publicKeyRequest.arrayBuffer();
+
+    var options = {
+      userVisibleOnly: true,
+      applicationServerKey: publicKey,
+    };
+
+    return options;
+  }
+
+  var createPushSubscription = (function () {
+    var actionInProgress;
+
+    return function () {
+      if (!actionInProgress) {
+        actionInProgress = navigator.serviceWorker.ready.then(
+          function (registration) {
+            return registration.pushManager.getSubscription()
+              .then(function (subscription) {
+                if (
+                  !subscription ||
+                  (subscription.expirationTime != null &&
+                    subscription.expirationTime <= Date.now())
+                ) {
+                  console.info(
+                    "Attempting to create a new subscription",
+                    subscription,
+                  );
+                  return getPushOptions().then(function (options) {
+                    return registration.pushManager.subscribe(options);
+                  });
+                }
+                console.info("Using existing subscription", subscription);
+                return subscription;
+              });
+          },
+        );
+        actionInProgress.then(function (subcription) {
+          if (!subcription) {
+            return;
+          }
+          notifySw("notifications-ready");
+        });
+        actionInProgress.finally(function () {
+          actionInProgress = undefined;
+        });
+      }
+      return actionInProgress;
+    };
+  })();
 
   var requestNotificationPermissions = function (permission, requested) {
     switch (permission) {
@@ -170,59 +229,6 @@
         }, 100);
       }
     };
-
-    var createPushSubscription = (function () {
-      var actionInProgress;
-
-      return function () {
-        if (!actionInProgress) {
-          actionInProgress = navigator.serviceWorker.ready.then(
-            function (registration) {
-              return registration.pushManager.getSubscription()
-                .then(function (subscription) {
-                  if (
-                    !subscription ||
-                    (subscription.expirationTime != null &&
-                      subscription.expirationTime <= Date.now())
-                  ) {
-                    console.info("Attempting to create a new subscription", subscription);
-                    return getPushOptions().then(function (options) {
-                      return registration.pushManager.subscribe(options);
-                    });
-                  }
-                  console.info("Using existing subscription", subscription);
-                  return subscription;
-                });
-            },
-          );
-          actionInProgress.then(function (subcription) {
-            if (!subcription) {
-              return;
-            }
-            notifySw("notifications-ready");
-          });
-          actionInProgress.finally(function () {
-            actionInProgress = undefined;
-          });
-        }
-        return actionInProgress;
-      };
-    })();
-
-    async function getPushOptions() {
-      var publicKeyRequest = await fetch("/vapid-public-key");
-      if (!publicKeyRequest.ok) {
-        throw new Error("Error obtaining VAPID public key");
-      }
-      var publicKey = await publicKeyRequest.arrayBuffer();
-
-      var options = {
-        userVisibleOnly: true,
-        applicationServerKey: publicKey,
-      };
-
-      return options;
-    }
 
     var textarea$ = document.createElement("textarea");
     textarea$.setAttribute("placeholder", "Nothing here yet\u2026");
