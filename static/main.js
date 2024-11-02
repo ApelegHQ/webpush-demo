@@ -59,9 +59,11 @@
   }
 
   function showError(name) {
-    var popover = typeof HTMLElement.prototype.showPopover === "function";
-    var error$ = document.createElement(popover ? "main" : "dialog");
-    if (popover) {
+    var supportsPopover = typeof HTMLElement.prototype.showPopover === "function";
+    var supportsDialog = typeof HTMLDialogElement === "function";
+    var errorElementTag = supportsPopover || !supportsDialog ? "aside" : "dialog";
+    var error$ = document.createElement(errorElementTag);
+    if (supportsPopover) {
       error$.setAttribute("popover", "manual");
     }
     var heading$ = document.createElement("h2");
@@ -72,9 +74,9 @@
     error$.appendChild(name$);
     error$.appendChild(document.createTextNode(" is not available"));
     document.body.appendChild(error$);
-    if (popover) {
+    if (supportsPopover) {
       error$.showPopover();
-    } else {
+    } else if (supportsDialog) {
       error$.showModal();
     }
     throw new Error(name + " is not available");
