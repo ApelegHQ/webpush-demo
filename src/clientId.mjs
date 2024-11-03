@@ -1,6 +1,9 @@
+// Generate an UUID from a `PushSubscription'
 export default async (subscriptionInfo) => {
   const textEncoder = new TextEncoder();
+  // <https://w3c.github.io/push-api/#pushsubscription-interface>
   const endpoint = textEncoder.encode(subscriptionInfo.endpoint);
+  // <https://w3c.github.io/push-api/#pushencryptionkeyname-enumeration>
   const p256dh = textEncoder.encode(subscriptionInfo.keys.p256dh);
   const auth = textEncoder.encode(subscriptionInfo.keys.auth);
 
