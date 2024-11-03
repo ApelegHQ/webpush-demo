@@ -208,25 +208,30 @@
         }
       };
 
-      if (
-        typeof navigator.permissions === "object" &&
-        navigator.permissions.query === "function"
-      ) {
-        navigator.permissions.query({ name: "notifications" }).then(
-          function (result) {
-            result.addEventListener("change", function () {
-              handler(result.state);
-            }, false);
-            handler(result.state, true);
-          },
-        ).catch(function (e) {
-          console.error("Error querying notifications permission", e);
-        });
-      } else {
+      var fallback = function () {
         handler(Notification.permission, true);
         setInterval(function () {
           handler(Notification.permission);
         }, 100);
+      }
+
+      if (
+        typeof navigator.permissions === "object" &&
+        typeof navigator.permissions.query === "function"
+      ) {
+        navigator.permissions.query({ name: "notifications" }).then(
+          function (result) {
+            handler(result.state, true);
+            result.addEventListener("change", function () {
+              handler(result.state);
+            }, false);
+          },
+        ).catch(function (e) {
+          console.error("Error querying notifications permission", e);
+          fallback();
+        });
+      } else {
+        fallback();
       }
     };
 
