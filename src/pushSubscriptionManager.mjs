@@ -32,9 +32,9 @@ const generateJwt = async (endpoint) => {
   const body = Buffer.from(JSON.stringify(
     Object.fromEntries([
       ["aud", audience],
-      ["exp", now + 60],
+      ["exp", now + 120],
       ["iat", now],
-      ["nbf", now - 60],
+      ["nbf", now - 120],
       ["sub", vapid.VAPID_EMAIL],
     ]),
   )).toString("base64url");
