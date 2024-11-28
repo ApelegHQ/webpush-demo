@@ -135,13 +135,13 @@
         registration.showNotification(
           data.title,
           {
-            body: data.body || "",
+            body: (data.body || "") + typeof self.indexedDB,
             icon: "",
           },
         ),
         messageAllClients({
           type: "push-notification",
-          value: data,
+          value: { ...data, body: (data.body || "") + typeof self.indexedDB },
         }),
       ]));
     } catch (e) {
